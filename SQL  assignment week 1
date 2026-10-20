@@ -1,0 +1,312 @@
+
+CREATE DATABASE IF NOT EXISTS kalobeyei_school
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE kalobeyei_school;
+
+-- 1. School information
+CREATE TABLE schools (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    school_name VARCHAR(200) NOT NULL,
+    school_code VARCHAR(50) UNIQUE,
+    address VARCHAR(255),
+    phone VARCHAR(30),
+    school_year SMALLINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO schools (school_name, address, school_year)
+VALUES (
+    'Kalobeyei Settlement Primary School',
+    'Kalobeyei Settlement, Turkana County, Kenya',
+    2026
+);
+
+-- 2. User roles
+CREATE TABLE roles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL UNIQUE
+);
+
+INSERT INTO roles (role_name) VALUES
+('Administrator'),
+('Head teacher'),
+('Teachers'),
+('Accountant'),
+('Parents');
+
+-- 3. User accounts
+-- Passwords must be securely hashed by the application.
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    school_id BIGINT UNSIGNED NOT NULL,
+    role_id BIGINT UNSIGNED NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(190) UNIQUE,
+    phone VARCHAR(30),
+    password_hash VARCHAR(255) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+-- 4. Classes and grades
+CREATE TABLE classes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    school_id BIGINT UNSIGNED NOT NULL,
+    class_name VARCHAR(50) NOT NULL,
+    academic_year SMALLINT NOT NULL,
+    class_teacher_id BIGINT UNSIGNED NULL,
+    UNIQUE (school_id, class_name, academic_year),
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (class_teacher_id) REFERENCES users(id)
+);
+
+INSERT INTO classes (school_id, class_name, academic_year)
+SELECT id, grade_name, 2026
+FROM schools
+CROSS JOIN (
+    SELECT 'PP1' AS grade_name UNION ALL
+    SELECT 'PP2' UNION ALL
+    SELECT 'Grade 1' UNION ALL
+    SELECT 'Grade 2' UNION ALL
+    SELECT 'Grade 3' UNION ALL
+    SELECT 'Grade 4' UNION ALL
+    SELECT 'Grade 5' UNION ALL
+    SELECT 'Grade 6' UNION ALL
+    SELECT 'Grade 7' UNION ALL
+    SELECT 'Grade 8'
+) AS grades;
+
+-- 5. Student records
+CREATE TABLE students (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    school_id BIGINT UNSIGNED NOT NULL,
+    admission_no VARCHAR(50) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    date_of_birth DATE NULL,
+    gender ENUM('Female','Male','Other','Not specified')
+        DEFAULT 'Not specified',
+    current_class_id BIGINT UNSIGNED NULL,
+    admission_date DATE,
+    status ENUM('Active','Transferred','Completed','Inactive')
+        NOT NULL DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (school_id, admission_no),
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (current_class_id) REFERENCES classes(id)
+);
+
+-- 6. Parent / guardian records
+CREATE TABLE guardians (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(150) NOT NULL,
+    phone VARCHAR(30),
+    email VARCHAR(190),
+    relationship VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE student_guardians (
+    student_id BIGINT UNSIGNED NOT NULL,
+    guardian_id BIGINT UNSIGNED NOT NULL,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (student_id, guardian_id),
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (guardian_id) REFERENCES guardians(id)
+);
+
+-- 7. Subjects and teacher assignments
+CREATE TABLE subjects (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    subject_name VARCHAR(100) NOT NULL UNIQUE
+);
+
+INSERT INTO subjects (subject_name) VALUES
+('English'), ('Kiswahili'), ('Mathematics'),
+('Science and Technology'), ('Social Studies'),
+('Creative Arts'), ('Physical Education');
+
+CREATE TABLE teacher_assignments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    class_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    teacher_user_id BIGINT UNSIGNED NOT NULL,
+    UNIQUE (class_id, subject_id, teacher_user_id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id),
+    FOREIGN KEY (teacher_user_id) REFERENCES users(id)
+);
+
+-- 8. Attendance
+CREATE TABLE attendance (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT UNSIGNED NOT NULL,
+    class_id BIGINT UNSIGNED NOT NULL,
+    attendance_date DATE NOT NULL,
+    status ENUM('Present','Absent','Late','Excused') NOT NULL,
+    recorded_by BIGINT UNSIGNED NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (student_id, attendance_date),
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (recorded_by) REFERENCES users(id)
+);
+
+-- 9. Academic terms and assessments
+CREATE TABLE academic_terms (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    school_id BIGINT UNSIGNED NOT NULL,
+    academic_year SMALLINT NOT NULL,
+    term_name VARCHAR(50) NOT NULL,
+    start_date DATE,
+    end_date DATE,
+    UNIQUE (school_id, academic_year, term_name),
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+);
+
+CREATE TABLE assessments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    term_id BIGINT UNSIGNED NOT NULL,
+    class_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    assessment_name VARCHAR(120) NOT NULL,
+    maximum_marks DECIMAL(6,2) NOT NULL DEFAULT 100,
+    assessment_date DATE,
+    FOREIGN KEY (term_id) REFERENCES academic_terms(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id),
+    CHECK (maximum_marks > 0)
+);
+
+CREATE TABLE assessment_results (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    assessment_id BIGINT UNSIGNED NOT NULL,
+    student_id BIGINT UNSIGNED NOT NULL,
+    marks_obtained DECIMAL(6,2) NOT NULL,
+    teacher_comment TEXT,
+    entered_by BIGINT UNSIGNED NOT NULL,
+    UNIQUE (assessment_id, student_id),
+    FOREIGN KEY (assessment_id) REFERENCES assessments(id),
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (entered_by) REFERENCES users(id),
+    CHECK (marks_obtained >= 0)
+);
+
+-- 10. Fees and invoices
+CREATE TABLE fee_invoices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT UNSIGNED NOT NULL,
+    term_id BIGINT UNSIGNED NOT NULL,
+    invoice_number VARCHAR(60) NOT NULL UNIQUE,
+    amount_due DECIMAL(12,2) NOT NULL,
+    due_date DATE,
+    status ENUM('Unpaid','Partially paid','Paid','Cancelled')
+        NOT NULL DEFAULT 'Unpaid',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (term_id) REFERENCES academic_terms(id),
+    CHECK (amount_due >= 0)
+);
+
+CREATE TABLE payments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    invoice_id BIGINT UNSIGNED NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method ENUM('Cash','M-Pesa','Bank','Other') NOT NULL,
+    transaction_reference VARCHAR(100) UNIQUE,
+    payment_status ENUM('Pending','Confirmed','Failed','Reversed')
+        NOT NULL DEFAULT 'Pending',
+    received_by BIGINT UNSIGNED NULL,
+    paid_at DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (invoice_id) REFERENCES fee_invoices(id),
+    FOREIGN KEY (received_by) REFERENCES users(id),
+    CHECK (amount > 0)
+);
+
+-- 11. Weekly timetable
+CREATE TABLE timetable (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    class_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    teacher_user_id BIGINT UNSIGNED NOT NULL,
+    day_of_week ENUM(
+        'Monday','Tuesday','Wednesday','Thursday','Friday'
+    ) NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    room VARCHAR(50),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id),
+    FOREIGN KEY (teacher_user_id) REFERENCES users(id),
+    CHECK (end_time > start_time)
+);
+
+-- 12. SMS notification records
+CREATE TABLE notifications (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    guardian_id BIGINT UNSIGNED NULL,
+    student_id BIGINT UNSIGNED NULL,
+    channel ENUM('SMS','Email') NOT NULL DEFAULT 'SMS',
+    message TEXT NOT NULL,
+    delivery_status ENUM(
+        'Draft','Queued','Sent','Delivered','Failed'
+    ) NOT NULL DEFAULT 'Draft',
+    provider_reference VARCHAR(150),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at DATETIME,
+    FOREIGN KEY (guardian_id) REFERENCES guardians(id),
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+-- 13. Student ID card records
+CREATE TABLE student_id_cards (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT UNSIGNED NOT NULL,
+    card_number VARCHAR(60) NOT NULL UNIQUE,
+    issue_date DATE NOT NULL,
+    expiry_date DATE,
+    status ENUM('Active','Expired','Replaced')
+        NOT NULL DEFAULT 'Active',
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+-- 14. Offline synchronization queue
+-- Each device should create a unique ID for each queued operation.
+CREATE TABLE sync_operations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    device_operation_id CHAR(36) NOT NULL UNIQUE,
+    user_id BIGINT UNSIGNED NULL,
+    entity_type VARCHAR(60) NOT NULL,
+    entity_id VARCHAR(100),
+    operation_type ENUM('INSERT','UPDATE','DELETE') NOT NULL,
+    payload JSON NOT NULL,
+    sync_status ENUM('Pending','Processed','Conflict','Failed')
+        NOT NULL DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Helpful indexes
+CREATE INDEX idx_students_class
+    ON students(current_class_id);
+
+CREATE INDEX idx_attendance_date_class
+    ON attendance(attendance_date, class_id);
+
+CREATE INDEX idx_assessment_student
+    ON assessment_results(student_id);
+
+CREATE INDEX idx_invoice_student
+    ON fee_invoices(student_id, term_id);
+
+CREATE INDEX idx_payments_status
+    ON payments(payment_status, created_at);
+
+CREATE INDEX idx_sync_status
+    ON sync_operations(sync_status, created_at);
